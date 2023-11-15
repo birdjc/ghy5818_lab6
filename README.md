@@ -12,4 +12,4 @@ Chroma
 
 DATA_SOURCES:
 
-The source of the data is the TDOT TITAN Dashboard. The source of the basemap is Stadia.
+The source of the data is the TDOT TITAN Dashboard. The source of the basemap is Carto.
