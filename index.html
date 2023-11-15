@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Davidson County Crash Dashboard</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.0/dist/leaflet.css"/>
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+
+    <style>
+ 	html, body, #map { width: 100%; height: 100%; margin: 0; background: #fff; }
+
+    h2 {
+        position: absolute;
+        left: 50px;
+        top: 10px;
+        padding: 8px 2%;
+        margin: 0;
+        background: white;
+        box-shadow: 0 0 15px rgba(0,0,0,0.2);
+        border-radius: 8px;
+        color: #333333;
+        font-family: 'Inter', 'Black 900';
+        font-size: 1.5em;
+        z-index: 800;
+    }
+
+    .legend {
+        line-height: 40px;
+        font-size: 16px;
+        width: 200px;
+        font-family: 'Inter', 'Light 300';
+        color: #333333;
+        padding: 15px 15px;
+        background: white;
+        background: rgba(255,255,255,1);
+        box-shadow: 0 0 15px rgba(0,0,0,0.2);
+        border-radius: 12px;
+    }
+ 
+    .legend i {
+        width: 20px;
+        height: 20px;
+        float: left;
+        margin-right: 8px;
+        opacity: 1;
+    }
+    
+    .legend img {
+        width: 16px;
+        height: 16px;
+        margin-right: 3px;
+        float: left;
+    }
+    
+    .legend p {
+        font-size: 14px;
+        line-height: 20px;
+        margin: 0;
+    }
+
+    </style>
+    	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;300;900&display=swap" rel="stylesheet">
+	<script src="https://unpkg.com/leaflet@1.7.0/dist/leaflet.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-ajax/2.1.0/leaflet.ajax.min.js"></script>
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/chroma-js/1.3.4/chroma.min.js"></script>
+
+</head>
+
+<body>
+    <!-- Our web map and content will go here -->
+    <div id="map"></div>
+    <h2>Fatal & Serious Crashes in Davidson County by Census Block Group, 2021-2023</h2>
+
+<script>
+
+var mymap = L.map('map', {
+    center: [36.1557616,-86.7733774], //map centered to Nashville
+    zoom: 10, //this line adjusts the starting zoom level of the map
+    maxZoom: 18,//this line sets the maximum zoom level
+    minZoom: 10,//this line sets the minimum zoom level
+    detectRetina: true // detect whether the screen is high resolution or not.
+});
+
+//L.tileLayer('http://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png').addTo(mymap);
+L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png').addTo(mymap);
+
+// 3. Add Airbnb GeoJSON Data
+// Null variable that will hold Airbnb data
+var davidson_crashes = null;
+
+// Get GeoJSON and put it on the map when it loads
+// assign a function to the onEachFeature parameter of the davidson_crashes object.
+// Then each (point) feature will have a popup window.
+// The content of the popup window is the value of `Crash_Type` from the attribute table
+davidson_crashes = L.geoJson.ajax("assets/FatalSeriousCrashes_Davidson.geojson",{
+ onEachFeature: function (feature, layer) {
+     layer.bindPopup(feature.properties.Crash_Type);
+ },
+
+pointToLayer: function(feature, latlng) {
+     if (feature.properties.Crash_Type == "Fatal") {return L.marker(latlng, {icon: L.divIcon({className: 'fa-solid fa-circle-xmark'})});}
+     else if (feature.properties.Crash_Type == "Suspected Serious Injury")  {return L.marker(latlng, {icon: L.divIcon({className: 'fa-regular fa-circle-xmark'})})};
+ },
+
+   attribution: 'Crash Reports &copy; TDOT TITAN Dashboard | Davidson County Census Blocks &copy; U.S. Census Bureau | Base Map &copy; CartoDB | Map Author: Jonah Bird'
+}).addTo(mymap);
+
+// 6. Set function for color ramp
+var colors = chroma.scale('OrRd').colors(5); //we'll use 5 classes of purples
+ 
+// Chloropleth classificati0n based on Natural Breaks method in ArcGIS Pro
+function setColor(density) {
+    var id = 0;
+    if (density > 27) { id = 4; } //5thclass=27+
+    else if (density > 18 && density <= 27) { id = 3; } //4thclass=18-27
+    else if (density > 10 && density <= 18) { id = 2; } //3rdclass=10-18
+    else if (density > 1 &&  density <= 10) { id = 1; } //2ndclass=1-10 
+    else  { id = 0; } //1stclass=0
+    return colors[id];
+};
+
+// 7. Set style function that sets fill color property equal to total crashes
+function style(feature) {
+    return {
+        fillColor: setColor(feature.properties.COUNT),
+        fillOpacity: 0.75,
+        weight: 2,
+        opacity: 1,
+        color: '#b4b4b4',
+        dashArray: '4'
+    };
+};
+
+// 8. Add county polygons
+L.geoJson.ajax("assets/FatalSeriousCrashes_Davidson_Aggregated.geojson", {
+    style: style
+}).addTo(mymap);
+
+// 9. Create Leaflet Control Object for Legend
+var legend = L.control({position: 'topright'});
+ 
+// 10. Function that runs when legend is added to map
+legend.onAdd = function () {
+ 
+    // Create Div Element and Populate it with HTML
+    var div = L.DomUtil.create('div', 'legend');
+    //this line creates a title for the choropleth part of the legend
+    div.innerHTML += '<b>Crashes Per Block Group</b><br />';
+    //the colors specify the color shade that we used to do the polygon shading
+    div.innerHTML += '<i style="background: ' + colors[4] + '; opacity: 0.75"></i><p>27+</p>';
+    div.innerHTML += '<i style="background: ' + colors[3] + '; opacity: 0.75"></i><p>18-27</p>';
+    div.innerHTML += '<i style="background: ' + colors[2] + '; opacity: 0.75"></i><p>10-18</p>';
+    div.innerHTML += '<i style="background: ' + colors[1] + '; opacity: 0.75"></i><p>1-10</p>';
+    div.innerHTML += '<i style="background: ' + colors[0] + '; opacity: 0.75"></i><p> 0</p>';
+    //this line provides the legend title for the crash symbols
+    div.innerHTML += '<hr><b>Crash Type<b><br />';
+    //below the symbols are styled
+    div.innerHTML += '<i class="fa-solid fa-circle-xmark"></i><p>Fatal Crash</p>';
+    div.innerHTML += '<i class="fa-regular fa-circle-xmark"></i><p>Serious Injury</p>';
+    // Return the Legend div containing the HTML content
+    return div;
+};
+ 
+// 11. Add a legend to map
+legend.addTo(mymap);
+
+L.control.scale({position: 'bottomleft'}).addTo(mymap);
+
+</script>
+</body>
+
+</html>
+
